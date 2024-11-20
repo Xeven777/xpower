@@ -1,54 +1,28 @@
 // Store active hostnames
 let activeHostnames = new Set();
 
-// Initialize storage
+// Load active hostnames from storage
 chrome.storage.local.get(['activeHostnames'], (result) => {
-    if (result.activeHostnames) {
-        activeHostnames = new Set(result.activeHostnames);
-    }
+    activeHostnames = new Set(result.activeHostnames || []);
 });
 
-// Handle icon clicks
-chrome.action.onClicked.addListener(async (tab) => {
-    const hostname = new URL(tab.url).hostname;
-    const isActive = activeHostnames.has(hostname);
-
-    if (isActive) {
-        activeHostnames.delete(hostname);
-    } else {
-        activeHostnames.add(hostname);
-    }
-
-    // Update storage
-    await chrome.storage.local.set({
-        activeHostnames: Array.from(activeHostnames)
-    });
-
-    // Update icon
-    await chrome.action.setIcon({
-        path: {
-            48: isActive ? 'icon48_inactive.png' : 'icon48_active.png',
-            128: isActive ? 'icon128_inactive.png' : 'icon128_active.png'
-        },
-        tabId: tab.id
-    });
-
-    // Refresh the tab
-    chrome.tabs.reload(tab.id);
-});
-
-// Keep tabs active
+// Listen for tab updates and send keepAlive messages
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
         const hostname = new URL(tab.url).hostname;
         if (activeHostnames.has(hostname)) {
             setInterval(() => {
-                chrome.tabs.sendMessage(tabId, { action: 'keepAlive' });
+                chrome.tabs.sendMessage(tabId, { action: 'keepAlive' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('[Always Active] Error sending keepAlive message:', chrome.runtime.lastError);
+                    }
+                });
             }, 25000);
         }
     }
 });
 
+// Listen for tab activations and update badge
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     const hostname = new URL(tab.url).hostname;

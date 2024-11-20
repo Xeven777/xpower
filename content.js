@@ -16,7 +16,8 @@ function initializeFeatures(settings) {
         enableRightClickAndCopy();
     }
     if (settings.alwaysActive) {
-        spoofVisibilityState();
+        // spoofVisibilityState();
+        forceAlwaysActive();
     }
     if (settings.dialogRemover) {
         removeCopyProtectionDialogs();
@@ -169,11 +170,6 @@ function removeCopyProtectionDialogs() {
 
 // Override common protection methods
 function overrideProtectionMethods() {
-    // Disable debug protection
-    Object.defineProperty(window, 'debugger', {
-        get: function () { return function () { }; }
-    });
-
     // Override console methods that might be used for protection
     const noopFunc = function () { };
     ['debug', 'clear', 'error'].forEach(method => {
@@ -193,7 +189,7 @@ function overrideProtectionMethods() {
 }
 
 // Initialize all features
-function initializeFeatures() {
+function initializeAllFeatures() {
     enableAbsoluteMode();
     removeCopyProtectionDialogs();
     overrideProtectionMethods();
@@ -220,9 +216,9 @@ function initializeFeatures() {
 
 // Start as soon as possible
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeFeatures);
+    document.addEventListener('DOMContentLoaded', initializeAllFeatures);
 } else {
-    initializeFeatures();
+    initializeAllFeatures();
 }
 
 // Handle messages from popup
@@ -248,60 +244,71 @@ document.addEventListener('contextmenu', function (e) {
 function spoofVisibilityState() {
     // Override visibility state properties
     Object.defineProperty(document, 'hidden', {
-        get: function () {
-            return false;
-        }
+        get: () => false,
+        configurable: true,
     });
 
     Object.defineProperty(document, 'visibilityState', {
-        get: function () {
-            return 'visible';
-        }
+        get: () => 'visible',
+        configurable: true,
     });
 
-    // Chrome-specific
-    Object.defineProperty(document, 'webkitHidden', {
-        get: function () {
-            return false;
-        }
-    });
-
-    // Firefox-specific
-    Object.defineProperty(document, 'mozHidden', {
-        get: function () {
-            return false;
-        }
-    });
-
-    // Spoof visibility change events
-    const nullifyEvent = (e) => {
+    // Override visibility events
+    const preventDefault = (e) => {
+        e.stopImmediatePropagation();
         e.preventDefault();
-        e.stopPropagation();
     };
 
-    // Create a fake visible state event
-    const fakeVisibleEvent = new Event('visibilitychange');
-    Object.defineProperty(fakeVisibleEvent, 'target', {
-        get: function () {
-            return {
-                visibilityState: 'visible',
-                hidden: false
-            };
-        }
+    ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange', 'blur', 'mouseleave']
+        .forEach(event => {
+            window.addEventListener(event, preventDefault, true);
+        });
+
+    // Dispatch a fake visibility event
+    setTimeout(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+    }, 1000);
+}
+function forceAlwaysActive() {
+    // Override `document.visibilityState` and `document.hidden`
+    Object.defineProperty(document, 'hidden', {
+        get: () => false,
+        configurable: true
     });
 
-    // Override visibility change events
-    document.addEventListener('visibilitychange', nullifyEvent, true);
-    document.addEventListener('webkitvisibilitychange', nullifyEvent, true);
-    document.addEventListener('mozvisibilitychange', nullifyEvent, true);
+    Object.defineProperty(document, 'visibilityState', {
+        get: () => 'visible',
+        configurable: true
+    });
 
-    // Override blur and mouseleave events
-    window.addEventListener('blur', nullifyEvent, true);
-    document.addEventListener('mouseleave', nullifyEvent, true);
+    // Prevent visibility-related events from being processed
+    const preventEventPropagation = (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    };
 
-    // Dispatch fake visible state
-    document.dispatchEvent(fakeVisibleEvent);
+    ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange', 'blur', 'mouseleave']
+        .forEach(event => {
+            document.addEventListener(event, preventEventPropagation, true);
+        });
+
+    // Simulate user activity events
+    function simulateActivity() {
+        const events = [
+            new MouseEvent('mousemove', { bubbles: true }),
+            new MouseEvent('mousedown', { bubbles: true }),
+            new KeyboardEvent('keydown', { bubbles: true, key: 'Shift' })
+        ];
+        events.forEach(event => document.dispatchEvent(event));
+    }
+
+    setInterval(simulateActivity, 100); // Simulate activity every 100ms
+
+    console.log('[Always Active]: Visibility spoofing and activity simulation enabled.');
 }
+
+// Execute the function
+
 
 // Keep the tab active by responding to background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
