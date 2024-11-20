@@ -1,4 +1,3 @@
-
 // Get the active tab's hostname and settings
 async function getCurrentTab() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -14,13 +13,12 @@ async function initializePopup() {
     const activeHostnames = new Set(result.activeHostnames || []);
     const settings = result.settings || {
         copyProtection: false,
-        alwaysActive: false,
         dialogRemover: false
     };
 
     // Update the UI with the stored settings
     document.getElementById('copyProtection').checked = settings.copyProtection;
-    document.getElementById('alwaysActive').checked = settings.alwaysActive;
+    document.getElementById('alwaysActive').checked = activeHostnames.has(hostname);
     document.getElementById('dialogRemover').checked = settings.dialogRemover;
 
     const statusElement = document.getElementById('status');
@@ -42,24 +40,58 @@ async function handleToggle(feature) {
     const activeHostnames = new Set(result.activeHostnames || []);
     const settings = result.settings || {};
 
-    settings[feature] = !settings[feature];
-    await chrome.storage.local.set({ settings });
-
-    // Add or remove hostname based on toggled status
-    if (settings[feature]) {
-        activeHostnames.add(hostname);
+    if (feature === 'alwaysActive') {
+        // Manage activeHostnames based on checkbox state
+        if (document.getElementById('alwaysActive').checked) {
+            activeHostnames.add(hostname);
+        } else {
+            activeHostnames.delete(hostname);
+        }
+        await chrome.storage.local.set({ activeHostnames: Array.from(activeHostnames) });
     } else {
-        activeHostnames.delete(hostname);
+        settings[feature] = document.getElementById(feature).checked;
+        await chrome.storage.local.set({ settings });
     }
-    await chrome.storage.local.set({ activeHostnames: [...activeHostnames] });
 
-    // Notify content script
-    chrome.tabs.sendMessage(tab.id, { action: 'updateSettings', settings });
-    initializePopup(); // Reinitialize the popup
+    // Update status
+    const statusElement = document.getElementById('status');
+    if (activeHostnames.has(hostname)) {
+        statusElement.textContent = 'Active';
+        statusElement.className = 'active';
+    } else {
+        statusElement.textContent = 'Inactive';
+        statusElement.className = 'inactive';
+    }
 }
 
 // Event Listeners
-document.addEventListener('DOMContentLoaded', initializePopup);
+document.addEventListener('DOMContentLoaded', async () => {
+    const tab = await getCurrentTab();
+    const hostname = new URL(tab.url).hostname;
+
+    const result = await chrome.storage.local.get(['activeHostnames', 'settings']);
+    const activeHostnames = new Set(result.activeHostnames || []);
+    const settings = result.settings || {
+        copyProtection: false,
+        dialogRemover: false
+    };
+
+    // Update the UI with the stored settings
+    document.getElementById('copyProtection').checked = settings.copyProtection;
+    document.getElementById('alwaysActive').checked = activeHostnames.has(hostname);
+    document.getElementById('dialogRemover').checked = settings.dialogRemover;
+
+    const statusElement = document.getElementById('status');
+    if (activeHostnames.has(hostname)) {
+        statusElement.textContent = 'Active';
+        statusElement.className = 'active';
+    } else {
+        statusElement.textContent = 'Inactive';
+        statusElement.className = 'inactive';
+    }
+});
+
+// Handle toggling features
 document.getElementById('copyProtection').addEventListener('change', () => handleToggle('copyProtection'));
 document.getElementById('alwaysActive').addEventListener('change', () => handleToggle('alwaysActive'));
 document.getElementById('dialogRemover').addEventListener('change', () => handleToggle('dialogRemover'));

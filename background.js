@@ -1,4 +1,4 @@
-// Store active hostnames
+let activeTabs = new Set();
 let activeHostnames = new Set();
 
 chrome.storage.local.get(['activeHostnames'], (result) => {
@@ -7,10 +7,8 @@ chrome.storage.local.get(['activeHostnames'], (result) => {
     }
 });
 
-// Keep track of intervals to avoid duplicates
 const keepAliveIntervals = {};
 
-// Listen for tab updates and send keepAlive messages
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
         let hostname;
@@ -22,29 +20,53 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }
 
         if (activeHostnames.has(hostname)) {
-            // Clear any existing interval for this tab
-            if (keepAliveIntervals[tabId]) {
-                clearInterval(keepAliveIntervals[tabId]);
-            }
-
-            // Set up a new interval to keep the tab active
-            keepAliveIntervals[tabId] = setInterval(() => {
-                chrome.tabs.sendMessage(tabId, { action: 'keepAlive' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                    }
-                });
-            }, 25000);
+            activeTabs.add(tabId);
+            sendKeepAlive(tabId);
+        } else if (activeTabs.has(tabId)) {
+            activeTabs.delete(tabId);
+            clearInterval(keepAliveIntervals[tabId]);
+            delete keepAliveIntervals[tabId];
         }
     }
 });
 
-// Clean up intervals when a tab is removed or updated
 chrome.tabs.onRemoved.addListener((tabId) => {
-    if (keepAliveIntervals[tabId]) {
-        clearInterval(keepAliveIntervals[tabId]);
-        delete keepAliveIntervals[tabId];
+    activeTabs.delete(tabId);
+    clearInterval(keepAliveIntervals[tabId]);
+    delete keepAliveIntervals[tabId];
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "toggleAlwaysActive") {
+        const tabId = sender.tab.id;
+        const hostname = new URL(sender.tab.url).hostname;
+
+        if (activeHostnames.has(hostname)) {
+            activeHostnames.delete(hostname);
+            // Optionally revert changes in content script
+        } else {
+            activeHostnames.add(hostname);
+            chrome.tabs.sendMessage(tabId, { action: 'activateAlwaysActive' });
+        }
+
+        // Update storage
+        chrome.storage.local.set({ activeHostnames: [...activeHostnames] });
+        sendResponse({ active: activeHostnames.has(hostname) });
     }
 });
+
+function sendKeepAlive(tabId) {
+    keepAliveIntervals[tabId] = setInterval(() => {
+        chrome.tabs.sendMessage(tabId, { action: 'keepAlive' }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("keepAlive message failed:", chrome.runtime.lastError);
+                //Consider clearing the interval if keepAlive fails repeatedly.
+                clearInterval(keepAliveIntervals[tabId]);
+                delete keepAliveIntervals[tabId];
+            }
+        });
+    }, 10000); // Send every 10 seconds - adjust as needed
+}
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'loading' && keepAliveIntervals[tabId]) {

@@ -16,7 +16,7 @@ function initializeFeatures(settings) {
         enableRightClickAndCopy();
     }
     if (settings.alwaysActive) {
-        forceAlwaysActive();
+        keepTabActive();
     }
     if (settings.dialogRemover) {
         removeCopyProtectionDialogs();
@@ -239,47 +239,50 @@ document.addEventListener('contextmenu', function (e) {
         });
     }
 });
-
-function forceAlwaysActive() {
-    // Override `document.visibilityState` and `document.hidden`
-    Object.defineProperty(document, 'hidden', {
-        get: () => false,
-        configurable: true
-    });
-
-    Object.defineProperty(document, 'visibilityState', {
-        get: () => 'visible',
-        configurable: true
-    });
-
-    // Prevent visibility-related events from being processed
-    const preventEventPropagation = (e) => {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-    };
-
-    ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange', 'blur', 'mouseleave']
-        .forEach(event => {
-            document.addEventListener(event, preventEventPropagation, true);
-        });
-
-    // Simulate user activity events
-    function simulateActivity() {
-        const events = [
-            new MouseEvent('mousemove', { bubbles: true }),
-            new MouseEvent('mousedown', { bubbles: true }),
-            new KeyboardEvent('keydown', { bubbles: true, key: 'Shift' })
-        ];
-        events.forEach(event => document.dispatchEvent(event));
-    }
-
-    setInterval(simulateActivity, 100); // Simulate activity every 100ms
-
-    console.log('[Always Active]: Visibility spoofing and activity simulation enabled.');
+function keepTabActive() {
+    modifyVisibility();
+    preventVisibilityEvents();
+    ensureAnimationFrame();
+    console.log('[Always Active]: Enabled');
 }
 
-// Execute the function
+function modifyVisibility() {
+    Object.defineProperty(document, 'visibilityState', {
+        get: function () {
+            return 'visible';
+        },
+        configurable: true
+    });
 
+    Object.defineProperty(document, 'hidden', {
+        get: function () {
+            return false;
+        },
+        configurable: true
+    });
+
+    // Dispatch a visibilitychange event
+    document.dispatchEvent(new Event('visibilitychange'));
+}
+
+function preventVisibilityEvents() {
+    const handleVisibilityChange = (e) => {
+        e.stopImmediatePropagation();
+        e.preventDefault(); // Prevent default behavior
+    };
+
+    ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange'].forEach(event => {
+        document.addEventListener(event, handleVisibilityChange, true);
+    });
+}
+
+function ensureAnimationFrame() {
+    let animationFrameId;
+    const dummyAnimationFrameHandler = () => {
+        animationFrameId = requestAnimationFrame(dummyAnimationFrameHandler);
+    };
+    dummyAnimationFrameHandler(); // Start the loop
+}
 
 // Keep the tab active by responding to background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -320,3 +323,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 function preventDefault(event) {
     event.preventDefault();
 }
+
+// Override document.visibilityState and document.hidden
+Object.defineProperty(document, 'visibilityState', {
+    get: function () {
+        return 'visible';
+    },
+    configurable: true
+});
+
+Object.defineProperty(document, 'hidden', {
+    get: function () {
+        return false;
+    },
+    configurable: true
+});
+
+// Block visibility change events
+['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange'].forEach(event => {
+    document.addEventListener(event, function (e) {
+        e.stopImmediatePropagation();
+    }, true);
+});
+
+// Ensure requestAnimationFrame keeps running
+(function () {
+    let originalRequestAnimationFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = function (callback) {
+        return originalRequestAnimationFrame(function (timestamp) {
+            callback(timestamp);
+            window.requestAnimationFrame(callback);
+        });
+    };
+})();
