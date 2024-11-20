@@ -16,7 +16,6 @@ function initializeFeatures(settings) {
         enableRightClickAndCopy();
     }
     if (settings.alwaysActive) {
-        // spoofVisibilityState();
         forceAlwaysActive();
     }
     if (settings.dialogRemover) {
@@ -241,34 +240,6 @@ document.addEventListener('contextmenu', function (e) {
     }
 });
 
-function spoofVisibilityState() {
-    // Override visibility state properties
-    Object.defineProperty(document, 'hidden', {
-        get: () => false,
-        configurable: true,
-    });
-
-    Object.defineProperty(document, 'visibilityState', {
-        get: () => 'visible',
-        configurable: true,
-    });
-
-    // Override visibility events
-    const preventDefault = (e) => {
-        e.stopImmediatePropagation();
-        e.preventDefault();
-    };
-
-    ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange', 'blur', 'mouseleave']
-        .forEach(event => {
-            window.addEventListener(event, preventDefault, true);
-        });
-
-    // Dispatch a fake visibility event
-    setTimeout(() => {
-        document.dispatchEvent(new Event('visibilitychange'));
-    }, 1000);
-}
 function forceAlwaysActive() {
     // Override `document.visibilityState` and `document.hidden`
     Object.defineProperty(document, 'hidden', {
