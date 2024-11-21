@@ -50,7 +50,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         // Update storage
-        chrome.storage.local.set({ activeHostnames: [...activeHostnames] });
+        chrome.storage.local.set({ activeHostnames: [...activeHostnames], settings: { alwaysActive: activeHostnames.size > 0 } });
         sendResponse({ active: activeHostnames.has(hostname) });
     }
 });
@@ -69,20 +69,7 @@ function sendKeepAlive(tabId) {
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'loading' && keepAliveIntervals[tabId]) {
-        clearInterval(keepAliveIntervals[tabId]);
-        delete keepAliveIntervals[tabId];
-    }
-});
-
-// Listen for tab activations and update badge
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    try {
-        const tab = await chrome.tabs.get(activeInfo.tabId);
-        if (!tab.url) {
-            return;
-        }
-
+    if (changeInfo.status === 'complete' && tab.url) {
         let hostname;
         try {
             hostname = new URL(tab.url).hostname;
@@ -91,14 +78,15 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             return;
         }
 
-        const result = await chrome.storage.local.get(['activeHostnames']);
-        const activeHostnames = new Set(result.activeHostnames || []);
-
-        chrome.action.setBadgeText({
-            text: activeHostnames.has(hostname) ? 'ON' : '',
-            tabId: tab.id
-        });
-    } catch (e) {
-        console.error('Error in onActivated:', e);
+        if (activeHostnames.has(hostname)) {
+            activeTabs.add(tabId);
+            sendKeepAlive(tabId);
+        } else if (activeTabs.has(tabId)) {
+            activeTabs.delete(tabId);
+            clearInterval(keepAliveIntervals[tabId]);
+            delete keepAliveIntervals[tabId];
+            clearInterval(keepAliveIntervals[tabId]);
+            delete keepAliveIntervals[tabId];
+        }
     }
 });

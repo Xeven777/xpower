@@ -13,6 +13,7 @@ async function initializePopup() {
     const activeHostnames = new Set(result.activeHostnames || []);
     const settings = result.settings || {
         copyProtection: false,
+        alwaysActive: false,
         dialogRemover: false
     };
 
@@ -50,7 +51,7 @@ async function handleToggle(feature) {
         await chrome.storage.local.set({ activeHostnames: Array.from(activeHostnames) });
     } else {
         settings[feature] = document.getElementById(feature).checked;
-        await chrome.storage.local.set({ settings });
+        await chrome.storage.local.set({ activeHostnames: Array.from(activeHostnames), settings });
     }
 
     // Update status
