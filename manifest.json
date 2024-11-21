@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Xpower - Ultimate Protection Bypasser",
+  "name": "Xpower - Ultimate Always active tab and enable right click",
   "version": "1.0",
   "description": "Enables right-click, copy, and keeps tabs active in background",
   "permissions": ["tabs", "scripting", "activeTab", "storage", "contextMenus"],
