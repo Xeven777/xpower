@@ -96,7 +96,11 @@ function keepTabActive() {
         configurable: true
     });
 
-    const visibilityEvents = ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange'];
+    const visibilityEvents = [
+        'visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange',
+        'mouseenter', 'mouseleave', 'focusin', 'focusout', 'focus', 'blur'
+    ];
+
     visibilityEvents.forEach(event => {
         document.addEventListener(event, (e) => e.stopImmediatePropagation(), true);
     });
