@@ -98,14 +98,13 @@ function keepTabActive() {
 
     const visibilityEvents = [
         'visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange',
-        'mouseenter', 'mouseleave', 'focusin', 'focusout', 'focus', 'blur'
+        'mouseenter', 'mouseleave', 'focusin', 'focusout'
     ];
 
     visibilityEvents.forEach(event => {
         document.addEventListener(event, (e) => e.stopImmediatePropagation(), true);
     });
 
-    // Ensure requestAnimationFrame keeps running
     const originalRequestAnimationFrame = window.requestAnimationFrame;
     window.requestAnimationFrame = function (callback) {
         return originalRequestAnimationFrame(function (timestamp) {
